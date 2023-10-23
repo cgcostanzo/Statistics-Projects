@@ -1,0 +1,480 @@
+---
+title: "3302 Final Project Doctor Visits"
+author: "Charles Costanzo"
+date: "2023-04-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+setwd("/Users/charlescostanzo/College/Sp 2023/Stat 3302/Final Project/")
+
+library(tidyverse)
+library(AER)
+library(MASS)
+library(stargazer)
+library(pscl)
+library(kableExtra)
+data("DoctorVisits")
+doctor <- DoctorVisits
+```
+
+Create a variable table
+```{r}
+variable_table <- data.frame(Variable = c("visits","gender","age","income","illness","reduced",
+                        "health","private","freepoor","freerepat","nchronic",
+                        "lchronic"),
+           Description = c("Number of doctor visits in past 2 weeks.",
+                           "Factor indicating gender.",
+                           "Age in years divided by 100.",
+                           "Annual income in tens of thousands of dollars.",
+                           "Number of illnesses in past 2 weeks.",
+                           "Number of days of reduced activity in past 2 weeks
+                           due to illness or injury.",
+                           "General health questionnaire score using Goldberg's method.",
+                           "Factor. Does the individual have private health insurance?",
+                           "Factor. Does the individual have free government 
+                           health insurance due to low income?",
+                           "Factor. Does the individual have free government 
+                           health insurance due to old age, disability or veteran status?",
+                           "Factor. Is there a chronic condition not limiting activity?",
+                           "Factor. Is there a chronic condition limiting activity?"))
+
+# Create table for export
+knitr::kable(variable_table) %>%
+  kable_styling(full_width = F,
+                font_size = 12,
+                position = "left")
+```
+
+\newpage
+
+Create density plot for visits
+```{r}
+library(ggthemes)
+p <- ggplot(data = doctor) +
+  geom_density(aes(doctor$visits)) + 
+  xlab("Number of Doctor Visits in Past 2 Weeks") + 
+  ylab("Density") +
+  ggtitle("Density of Dependent Variable") +
+  scale_x_continuous(labels = c(0, 1,2,3,4,5,6,7,8,9,10),
+                     breaks = c(0, 1,2,3,4,5,6,7,8,9,10),
+                     lim = c(-1,10)) + 
+  theme_hc() + scale_colour_hc()
+
+# theme(rect = element_rect(fill = "transparent"),
+#         panel.background = element_rect(fill = "transparent",
+#         colour = NA_character_))
+```
+
+```{r}
+poisson_y <- doctor %>%
+  group_by(visits) %>%
+  summarize(count = n(),
+            prob = count/5190)
+
+x_vec <- poisson_y$visits # vector of sample elements
+y_vec <- poisson_y$prob # probability that count = x
+
+i <- 0
+plot(x_vec, y_vec, ylim = c(0, 1), pch = 19, 
+     xlab = "Number of Doctor Visits in the Past Two Weeks (x)",
+     ylab = "Probability that Number of Visits = x", xaxt = "n",
+     main = "Distribution of Visits") +
+  axis(side = 1, at = x_vec, tick = TRUE)
+for (i in 1:length(x_vec)) { # connect dots to x axis
+  segments(x_vec[i], 0, x_vec[i], y_vec[i], lty = 2)
+}
+```
+
+
+Save plot as a .png file in "plots" folder
+```{r}
+ggsave("visits_density.png", p, bg="transparent",
+       path = paste(getwd(),"/plots",sep=""))
+```
+
+\newpage
+
+Create distribution plot for `private` vs `insurance`
+
+```{r}
+p2 <- ggplot(data = doctor) +
+  geom_violin(aes(x = freepoor,
+                  y = income,
+                  fill = as.factor(freepoor))) +
+  geom_boxplot(aes(x = freepoor,
+                   y = income),
+               width = 0.1) + 
+  xlab("") + 
+  ylab("Annual Income (Tens of Thousands of Australian Dollars)") +
+  ggtitle("Parallel Box and Violin Plots for Income by Free Low Income Insurance") +
+  theme_hc() + scale_fill_manual(name = "Free Government Insurance due to Low Income",
+    values = c("#6B9080","#A4C3B2")) + 
+  coord_flip()
+```
+
+Save plot as a .png file in "plots" folder
+```{r}
+ggsave("private_income_boxplot.png", p2, bg="transparent",
+       path = paste(getwd(),"/plots",sep=""))
+```
+
+\newpage
+
+Summarize `visits` values
+```{r}
+doctor %>%
+  group_by(as.factor(visits)) %>%
+  summarize(count = n())
+```
+
+\newpage
+
+Get mean number of doctor visits by insurance type
+```{r}
+mean_visits_insur <- doctor %>%
+  group_by(private, freepoor, freerepat) %>%
+  summarize(mean_visits = mean(visits, na.rm = TRUE))
+mean_visits_insur
+
+mean_visits_insur_table <- data.frame(
+  Insurance = c("Private","Free Government Insurance due to Low Income",
+      "Free Government Insurance due to Old Age, Disability, or Veteran Status",
+      "No Insurance"),
+  `Mean Doctor Visits` = 
+    c(mean_visits_insur$mean_visits[mean_visits_insur$private == "yes"],
+      mean_visits_insur$mean_visits[mean_visits_insur$freepoor == "yes"],
+      mean_visits_insur$mean_visits[mean_visits_insur$freerepat == "yes"],
+mean_visits_insur$mean_visits[mean_visits_insur$private == "no" & mean_visits_insur$freepoor == "no" & mean_visits_insur$freerepat == "no"]
+    ))
+
+mean_visits_insur_table$Mean.Doctor.Visits <-
+  round(mean_visits_insur_table$Mean.Doctor.Visits, 3)
+
+names(mean_visits_insur_table) <- c("Insurance Type", "Mean Doctor Visits (past 2 weeks)")
+
+knitr::kable(mean_visits_insur_table) %>%
+  kable_styling(full_width = F,
+                font_size = 16,
+                position = "left")
+```
+
+\newpage
+
+Get mean number of doctor visits by gender
+```{r}
+mean_visits_gender <- doctor %>%
+  group_by(gender) %>%
+  summarize(Mean.Doctor.Visits = mean(visits, na.rm = TRUE))
+
+mean_visits_gender_table <- data.frame(
+  Gender = c("Male","Female"),
+  Mean.Doctor.Visits = 
+    c(mean_visits_gender$Mean.Doctor.Visits[mean_visits_gender$gender == "male"],
+      mean_visits_gender$Mean.Doctor.Visits[mean_visits_gender$gender == "female"]))
+
+names(mean_visits_gender_table) <- c("Sex", "Mean Doctor Visits (past 2 weeks)")
+
+knitr::kable(mean_visits_gender_table) %>%
+  kable_styling(full_width = F,
+                font_size = 30,
+                position = "center")
+```
+
+\newpage
+
+# Model Description
+
+Let $\textbf{Y}$ be our vector of data containing the number of doctor visits within the past two weeks, `visits`.
+
+$$\text{Assume } \{Y_1\ldots,Y_{n=5190}\} \overset{ind}{\sim} Poisson(\lambda_i)$$
+
+We will use the log link.
+
+Poisson GLM:
+
+$$\eta_i = g(\lambda_i) = log(\lambda_i) = \textbf{x}_i^{\intercal}\boldsymbol{\beta}, \; \; i = 1,\ldots,n=5190$$
+
+where 
+
+ - $\eta_i$ is the estimated log mean number of doctor visits in the past two weeks for individual $i$ (according to their specific covariate values $\textbf{x}_i$)
+ 
+ - $\textbf{x}_i=(x_{i,1},\ldots,x_{i,p=12})^\intercal$ are the $p$ covariates (including an intercept) for individual $i$
+ 
+ - $\boldsymbol{\beta} = (\beta_0,\beta_1,\ldots,\beta_{p=12})$ is our unknown coefficient vector. 
+ 
+ \newpage
+ 
+run first Poisson model for visits
+```{r}
+model1 <- glm(visits ~ .,
+              family = "poisson",
+              data = doctor)
+summary(model1)
+```
+
+\newpage
+
+Create Analysis of Deviance Table
+```{r}
+anova(model1, test = "Chisq")
+```
+
+\newpage
+
+Conduct a Chi-Square Test at the $\alpha = 0.05$ level to demonstrate that the `freerepat`, `nchronic`, and `lchronic` variables should be removed from the model.
+
+
+$H_0:$ Reduced Model (without `freerepat`, `nchronic`, and `lchronic`) is good enough vs.
+
+$H_1:$ Full Model (including all predictor variables) is Needed
+
+
+ - $D_{full} = 4380.1$
+ 
+ - $D_{reduced} = 4385.5$
+ 
+*Test Statistic:*
+
+$$\Delta D = D_{reduced} - D_{full} = 4385.5 - 4380.1$$
+$$\Rightarrow \Delta D = 5.4$$
+
+Under $H_0, \Delta D \sim \chi^{2}_{pFull-pReduced = 12-9}$ 
+$$\Rightarrow \Delta D \sim\chi^2_3$$
+**Rejection Rule:** Reject if $\Delta D >$ `qchisq(1-0.05,3)` = 7.814728
+
+Since our Test Statistic $\Delta D = 5.4 < 7.8,$ we fail to reject the null hypothesis at the $\alpha = 0.05$ significance level.
+
+**p value:** `pchisq(5.4, 3, lower.tail = FALSE)` = 0.1447436
+
+**Conclusion:**
+
+The reduced model is good enough (that does not include `freerepat`, `nchronic`, and `lchronic`) and provides a better fit to the data set than the full model that includes those three covariates. We will now drop these covariates and fit a reduced model.
+
+\newpage
+
+```{r}
+model1_reduced <- glm(visits ~ gender + age + income + illness + reduced + health + 
+    private + freepoor,
+    family = "poisson",
+    data = doctor)
+summary(model1_reduced)
+```
+
+\newpage
+
+Check for overdispersion
+``` {r}
+var(doctor$visits)
+mean(doctor$visits)
+
+dispersiontest(model1, alternative = "greater")
+```
+
+There is indeed overdispersion, so run a quasipoisson model
+
+\newpage
+
+Run quasipoisson model
+``` {r}
+model2_reduced <- glm(visits ~ gender + age + income + illness + reduced + health + 
+    private + freepoor,
+    family = "quasipoisson",
+    data = doctor)
+summary(model2_reduced)
+```
+
+\newpage
+
+Also try a zero-inflated Poisson since there are a lot of zeros (see density plot)
+```{r}
+model3 <- zeroinfl(visits ~ .,
+    data = doctor)
+summary(model3)
+```
+
+\newpage
+
+Run a model to see what variables impact whether or not someone has private insurance
+``` {r}
+model4 <- glm(private ~ .,
+              family = "binomial",
+              data = doctor)
+summary(model4)
+```
+
+\newpage
+
+Create stargazer tables for models
+
+```{r}
+# stargazer(model1,model1_reduced,model2_reduced, type = "html", out = "count_models.html")
+
+# stargazer(model4, type = "html", out = "logistic_model.html")
+```
+
+\newpage
+
+Create a function to run diagnostics on the count models
+```{r}
+poisson_diagnostics <- function (model){
+  fits <- fitted(model)
+  deviance.resids <- resid(model1) ## deviance is the default
+  par(mfrow = c(2,2), cex = 0.3)
+  plot(fits, deviance.resids); abline(h = 0)
+  qqnorm(deviance.resids); qqline(deviance.resids)
+
+  pearson.resids <- resid(model, type = "pearson")
+  plot(fits, pearson.resids);abline(h = 0)
+  qqnorm(pearson.resids) ; qqline(pearson.resids)
+}
+```
+
+\newpage
+
+```{r}
+poisson_diagnostics(model1)
+```
+
+\newpage
+
+```{r}
+poisson_diagnostics(model1_reduced)
+```
+
+\newpage
+
+```{r}
+poisson_diagnostics(model2_reduced)
+```
+
+\newpage
+
+```{r}
+poisson_diagnostics(model3)
+```
+
+\newpage
+
+# Count models for Doctor Visits
+
+\begin{table}[!htbp] \centering 
+  \caption{} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}}lccc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+ & \multicolumn{3}{c}{\textit{Dependent variable:}} \\ 
+\cline{2-4} 
+\\[-1.8ex] & \multicolumn{3}{c}{visits} \\ 
+\\[-1.8ex] & \textit{Poisson} & \textit{negative} & \textit{zero-inflated} \\ 
+ & \textit{} & \textit{binomial} & \textit{count data} \\ 
+\\[-1.8ex] & (1) & (2) & (3)\\ 
+\hline \\[-1.8ex] 
+ genderfemale & 0.156$^{***}$ & 0.216$^{***}$ & $-$0.020 \\ 
+  & (0.056) & (0.070) & (0.072) \\ 
+  & & & \\ 
+ age & 0.279$^{*}$ & 0.331 & $-$0.002 \\ 
+  & (0.166) & (0.208) & (0.218) \\ 
+  & & & \\ 
+ income & $-$0.187$^{**}$ & $-$0.156 & $-$0.214$^{*}$ \\ 
+  & (0.085) & (0.104) & (0.110) \\ 
+  & & & \\ 
+ illness & 0.186$^{***}$ & 0.215$^{***}$ & 0.044$^{*}$ \\ 
+  & (0.018) & (0.024) & (0.025) \\ 
+  & & & \\ 
+ reduced & 0.127$^{***}$ & 0.144$^{***}$ & 0.083$^{***}$ \\ 
+  & (0.005) & (0.007) & (0.006) \\ 
+  & & & \\ 
+ health & 0.031$^{***}$ & 0.038$^{***}$ & 0.023$^{**}$ \\ 
+  & (0.010) & (0.014) & (0.011) \\ 
+  & & & \\ 
+ privateyes & 0.126$^{*}$ & 0.116 & $-$0.022 \\ 
+  & (0.072) & (0.086) & (0.097) \\ 
+  & & & \\ 
+ freepooryes & $-$0.438$^{**}$ & $-$0.497$^{**}$ & $-$0.382 \\ 
+  & (0.180) & (0.211) & (0.241) \\ 
+  & & & \\ 
+ freerepatyes & 0.084 & 0.146 & $-$0.212$^{*}$ \\ 
+  & (0.092) & (0.116) & (0.119) \\ 
+  & & & \\ 
+ nchronicyes & 0.117$^{*}$ & 0.098 & $-$0.012 \\ 
+  & (0.067) & (0.079) & (0.093) \\ 
+  & & & \\ 
+ lchronicyes & 0.151$^{*}$ & 0.183$^{*}$ & 0.002 \\ 
+  & (0.082) & (0.103) & (0.102) \\ 
+  & & & \\ 
+ Constant & $-$2.098$^{***}$ & $-$2.276$^{***}$ & $-$0.550$^{***}$ \\ 
+  & (0.102) & (0.123) & (0.144) \\ 
+  & & & \\ 
+\hline \\[-1.8ex] 
+Observations & 5,190 & 5,190 & 5,190 \\ 
+Log Likelihood & $-$3,355.850 & $-$3,199.838 & $-$3,180.927 \\ 
+$\theta$ &  & 0.930$^{***}$  (0.087) &  \\ 
+Akaike Inf. Crit. & 6,735.701 & 6,423.676 &  \\ 
+\hline 
+\hline \\[-1.8ex] 
+\textit{Note:}  & \multicolumn{3}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
+\end{tabular} 
+\end{table} 
+
+\newpage
+
+# Logistic Regression Model for Private Insurance
+
+\begin{table}[!htbp] \centering 
+  \caption{} 
+  \label{} 
+\begin{tabular}{@{\extracolsep{5pt}}lc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+ & \multicolumn{1}{c}{\textit{Dependent variable:}} \\ 
+\cline{2-2} 
+\\[-1.8ex] & private \\ 
+\hline \\[-1.8ex] 
+ visits & 0.074 \\ 
+  & (0.057) \\ 
+  & \\ 
+ genderfemale & 0.818${***}$ \\ 
+  & (0.074) \\ 
+  & \\ 
+ age & 3.726$^{***}$ \\ 
+  & (0.242) \\ 
+  & \\ 
+ income & 0.689$^{***}$ \\ 
+  & (0.101) \\ 
+  & \\ 
+ illness & 0.025 \\ 
+  & (0.032) \\ 
+  & \\ 
+ reduced & $-$0.027$^{*}$ \\ 
+  & (0.016) \\ 
+  & \\ 
+ health & $-$0.022 \\ 
+  & (0.019) \\ 
+  & \\ 
+ freepooryes & $-$18.413 \\ 
+  & (418.751) \\ 
+  & \\ 
+ freerepatyes & $-$20.264 \\ 
+  & (190.618) \\ 
+  & \\ 
+ nchronicyes & 0.241$^{***}$ \\ 
+  & (0.082) \\ 
+  & \\ 
+ lchronicyes & 0.285$^{**}$ \\ 
+  & (0.139) \\ 
+  & \\ 
+ Constant & $-$1.805$^{***}$ \\ 
+  & (0.119) \\ 
+  & \\ 
+\hline \\[-1.8ex] 
+Observations & 5,190 \\ 
+Log Likelihood & $-$2,330.324 \\ 
+Akaike Inf. Crit. & 4,684.648 \\ 
+\hline 
+\hline \\[-1.8ex] 
+\textit{Note:}  & \multicolumn{1}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
+\end{tabular} 
+\end{table} 
