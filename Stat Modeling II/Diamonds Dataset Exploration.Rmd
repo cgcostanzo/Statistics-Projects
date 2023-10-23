@@ -1,0 +1,186 @@
+---
+title: "3302 Final Project"
+author: "Charles Costanzo"
+date: "2023-04-11"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(GGally)
+```
+
+```{r}
+Diamonds <- diamonds %>%
+  mutate(volume = x * y * z)
+
+Diamonds <- Diamonds %>%
+  select(-c(x,y,z))
+
+par(mfrow = c(1,2))
+plot((Diamonds$volume[Diamonds$volume < 3000]),(Diamonds$price[Diamonds$volume < 3000]),
+     xlab = "Volume", ylab = "Price")
+plot((Diamonds$volume[Diamonds$volume < 3000]),sqrt(Diamonds$price[Diamonds$volume < 3000]),
+     xlab = "Volume", ylab = "sqrt Price")
+
+par(mfrow = c(1,2))
+plot((Diamonds$carat),(Diamonds$price))
+plot(sqrt(Diamonds$carat),sqrt(Diamonds$price))
+
+plot(density(diamonds$price))
+```
+
+```{r}
+Diamonds %>%
+  ggplot() +
+  geom_boxplot(aes(x = color, y = price, fill = color), color = "black") +
+  theme_classic() +
+  xlab("Diamond Color from D (Best) to J (Worst)") + ylab("Diamond Price") +
+  ggtitle("Boxplots of Diamond Price by Color") +
+  scale_fill_manual(name = "Diamond Color",
+                    values = c("#C4EEFD","#75D9FA","#10BFF9","#06A5DB","#0587B3","#035E7B", 
+                               "#033C4F"))
+```
+
+```{r cars}
+ggplot(data = diamonds) +
+  geom_jitter(mapping = aes(
+    x = carat,
+    y = price,
+    color = cut
+  )) + 
+  geom_smooth(mapping = aes(
+    x = carat,
+    y = price,
+  ),
+  color = "black",
+      method = "glm") +
+scale_color_manual(values = c("#D4E4BC","#BED699","#A2C56D","#85AF46","#648334"),
+                   name = "Cut") +
+  xlab("Carat") + ylab("Price") +
+facet_wrap(~cut)
+```
+
+```{r, include = FALSE}
+model1 <- glm(price ~ carat, data = Diamonds)
+# summary(model1)
+model1AIC <- extractAIC(model1)[2]
+model1AIC
+
+model2 <- glm(price ~ carat + cut, data = Diamonds)
+# summary(model2)
+model2AIC <- extractAIC(model2)[2]
+model2AIC
+
+model3 <- glm(price ~ carat + cut + color, data = Diamonds)
+# summary(model3)
+model3AIC <- extractAIC(model3)[2]
+model3AIC
+
+model4 <- glm(price ~ carat + cut + color + clarity, data = Diamonds)
+# summary(model4)
+model4AIC <- extractAIC(model4)[2]
+model4AIC
+
+model5 <- glm(price ~ carat + cut + color + clarity + depth, data = Diamonds)
+# summary(model5)
+model5AIC <- extractAIC(model5)[2]
+model5AIC
+
+model6 <- glm(price ~ carat + cut + color + clarity + table, data = Diamonds)
+# summary(model6)
+model6AIC <- extractAIC(model6)[2]
+model6AIC
+
+model7 <- glm(price ~ carat + cut + color + clarity + volume, data = Diamonds)
+# summary(model7)
+model7AIC <- extractAIC(model7)[2]
+model7AIC
+
+model8 <- glm(price ~ carat + cut + color + clarity, data = Diamonds)
+# summary(model8)
+model8AIC <- extractAIC(model8)[2]
+model8AIC
+```
+\newpage
+
+```{r}
+quantile(diamonds$price)
+Diamonds <- diamonds
+
+Q1 <- quantile(diamonds$price, .25)
+
+Q3 <- quantile(diamonds$price, .75)
+
+IQR <- IQR(diamonds$price)
+
+Diamonds <- Diamonds %>%
+  mutate(volume = x * y * z,
+         expensive = case_when(
+           diamonds$price > median(diamonds$price) ~ "1",
+           diamonds$price <= median(diamonds$price) ~ "0"
+           ),
+         cut = case_when(
+           cut == "Ideal" ~ "1",
+           cut == "Premium" ~ "2",
+           cut == "Very Good" ~ "3",
+           cut == "Good" ~ "4",
+           cut == "Fair" ~ "5"
+         ),
+         color = case_when(
+           color == "D" ~ "1",
+           color == "E" ~ "2",
+           color == "F" ~ "3",
+           color == "G" ~ "4",
+           color == "H" ~ "5",
+           color == "I" ~ "6",
+           color == "J" ~ "7"
+         ),
+         clarity = case_when(
+           clarity == "IF" ~ "1",
+           clarity == "VVS1" ~ "2",
+           clarity == "VVS2" ~ "3",
+           clarity == "VS1" ~ "4",
+           clarity == "VS2" ~ "5",
+           clarity == "SI1" ~ "6",
+           clarity == "SI2" ~ "7",
+           clarity == "I1" ~ "8"
+         ),
+         outlier = case_when(
+           price < Q1 ~ "1",
+           price > Q3 ~ "1",
+           TRUE ~ "0"
+         ))
+
+Diamonds <- Diamonds %>%
+  mutate(cut = as.factor(cut),
+         color = as.factor(color),
+         clarity = as.factor(clarity))
+
+Diamonds <- Diamonds %>%
+  mutate(cut = relevel(Diamonds$cut, ref = "5"),
+         color = relevel(Diamonds$color, ref = "7"),
+         clarity = relevel(Diamonds$clarity, ref = "8"))
+
+Diamonds_no_outlier <- Diamonds %>%
+  filter(outlier == "0")
+```
+
+\newpage
+
+```{r}
+model1 <- glm(as.factor(expensive) ~ (carat) + clarity, 
+              family = binomial(link = "logit"), 
+              data = Diamonds_no_outlier)
+summary(model1)
+
+exp(coef(model1))
+```
+
+
+
+
+
